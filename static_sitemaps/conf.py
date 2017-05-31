@@ -52,7 +52,7 @@ INDEX_TEMPLATE = getattr(settings, 'STATICSITEMAPS_INDEX_TEMPLATE',
 STORAGE_CLASS = getattr(settings, 'STATICSITEMAPS_STORAGE', 'django.core.files.storage.FileSystemStorage')
 
 # How often should the celery task be run.
-CELERY_TASK_REPETITION = getattr(settings, 'STATICSITEMAPS_REFRESH_AFTER', 60)
+CELERY_TASK_REPETITION = int(getattr(settings, 'STATICSITEMAPS_REFRESH_AFTER', 60))
 
 # Mock django sites framework
 MOCK_SITE = getattr(settings, 'STATICSITEMAPS_MOCK_SITE', False)
@@ -64,7 +64,7 @@ MOCK_SITE_NAME = getattr(settings, 'STATICSITEMAPS_MOCK_SITE_NAME', None)
 MOCK_SITE_PROTOCOL = getattr(settings, 'STATICSITEMAPS_MOCK_SITE_PROTOCOL', 'http')
 
 # Mainly for testing, will limit the results from get_urls() for each sitemap (using [:limit])
-PER_SITEMAP_LIMIT = getattr(settings, 'STATICSITEMAPS_PER_SITEMAP_LIMIT')
+PER_SITEMAP_LIMIT = int(getattr(settings, 'STATICSITEMAPS_PER_SITEMAP_LIMIT', 0))
 
 # Where the sitemap index file url is saved
 CACHE_KEY = getattr(settings, 'STATICSITEMAPS_CACHE_KEY', 'sitemaps_url')
