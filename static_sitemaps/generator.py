@@ -241,8 +241,9 @@ class SitemapGenerator(object):
         Renders template and stores to file based on site/page/section and content hash, returning file path.
         '''
         template = getattr(site, 'sitemap_template', 'sitemap.xml')
-        output = loader.render_to_string(template, {'urlset': self.get_page_urls(site, page)})
-        # NOTE: hash based on raw content, BEFORE gzip. However, changing protocol will
+        # Encode it now, both hash and f.write require it.
+        output = smart_bytes(loader.render_to_string(template, {'urlset': self.get_page_urls(site, page)}), errors="ignore")
+        # NOTE: hash based on raw content, BEFORE gzip. However, changing to not zip will
         # change the default filename and thereby invalidate the stored file.
         hash = self.get_hash(output)
         file_path = self.page_path_template % {'section': section, 'page': page, 'hash': hash}
@@ -257,8 +258,7 @@ class SitemapGenerator(object):
                 self.out('Compressing...', 2)
                 buf = BytesIO()
                 with gzip.GzipFile(fileobj=buf, mode="w") as f:
-                    # Encode to bytes for write
-                    f.write(smart_bytes(output))
+                    f.write(output)
                 output = buf.getvalue()
             except OSError:
                 self.out("Compress %s file error" % file_path)
