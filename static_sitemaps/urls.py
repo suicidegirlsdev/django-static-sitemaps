@@ -3,30 +3,28 @@ Created on 24.10.2011
 
 @author: xaralis
 '''
-import os
-
-from django.http import HttpResponse, Http404
+from django.http import HttpResponse, Http404, HttpResponseRedirect
 
 from static_sitemaps import conf
-from static_sitemaps.util import _lazy_load
-
+from static_sitemaps.generator import SitemapGenerator
 
 try:
     from django.conf.urls import url
 except ImportError:  # django < 1.4
     from django.conf.urls.defaults import patterns, url
 
-
 def serve_index(request):
-    storage = _lazy_load(conf.STORAGE_CLASS)(location=conf.ROOT_DIR)
-    path = os.path.join(conf.ROOT_DIR, 'sitemap.xml')
-    if not storage.exists(path):
-        raise Http404('No sitemap index file found on %r. Run django-admin.py '
-                      'refresh_sitemap first.' % path)
+    generator = SitemapGenerator()
+    index_url = generator.get_index_file_path()
+    if not conf.SERVE_INDEX_VIA_PASSTHRU:
+        return HttpResponseRedirect(index_url)
 
-    f = storage.open(path)
-    content = f.readlines()
-    f.close()
+    try:
+        with generator.storage.open(index_url) as f:
+            content = f.readlines()
+    except IOError:
+        raise Http404("No sitemap file exists")
+
     return HttpResponse(content, content_type='application/xml')
 
 urlpatterns = [

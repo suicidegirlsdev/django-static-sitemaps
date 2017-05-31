@@ -2,7 +2,7 @@ from importlib import import_module
 
 from django.core.exceptions import ImproperlyConfigured
 
-
+# In what way is this lazy??
 def _lazy_load(class_path):
     module, attr = class_path.rsplit('.', 1)
     try:
