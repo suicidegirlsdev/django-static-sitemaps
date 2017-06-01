@@ -81,7 +81,7 @@ class SitemapGenerator(object):
     @classmethod
     def get_index_url(cls):
         '''
-        Returns the relative path to the index file based on current config settings, caching results.
+        Returns the URL of the index file based on current config settings, caching results.
         '''
         url = cache.get(cls.cache_key)
         if url:

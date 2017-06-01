@@ -15,12 +15,11 @@ except ImportError:  # django < 1.4
 
 def serve_index(request):
     generator = SitemapGenerator()
-    index_url = generator.get_index_file_path()
     if not conf.SERVE_INDEX_VIA_PASSTHRU:
-        return HttpResponseRedirect(index_url)
+        return HttpResponseRedirect(generator.get_index_url())
 
     try:
-        with generator.storage.open(index_url) as f:
+        with generator.storage.open(generator.get_index_file_path()) as f:
             content = f.readlines()
     except IOError:
         raise Http404("No sitemap file exists")
