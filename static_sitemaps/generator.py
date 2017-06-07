@@ -21,29 +21,6 @@ from datetime import datetime
 __author__ = 'xaralis'
 
 
-class FormatToRegex(dict):
-    '''
-    Helper class to convert format string (using named placeholders) to regex.
-    Adapted from: https://stackoverflow.com/questions/2654856/python-convert-format-string-to-regular-expression
-    '''
-    # Quick and dirty unique str
-    _unique = "_UNIQ-%s_" % hash(object())
-    def __getitem__(self, key):
-        return self._unique + ('(?P<%s>.*?)' % key) + self._unique
-
-    @classmethod
-    def convert(cls, format):
-        sane = 50
-        while cls._unique in format and sane:
-            cls._unique = "_UNIQ-%s_" % hash(object())
-            sane += -1
-        assert sane, "Failed to get unique token for converting regex from format: %s, last try: "  % (format, cls._unique)
-        parts = (format % cls()).split(cls._unique)
-        for i in range(0, len(parts), 2):
-            parts[i] = re.escape(parts[i])
-        return re.compile(''.join(parts))
-
-
 class SitemapGenerator(object):
     cache_key = conf.CACHE_KEY
     # Get dir paths and bake into filepath templates, to avoid extra join calls
@@ -100,7 +77,7 @@ class SitemapGenerator(object):
         if not filename:
             return False
         if not cls.page_filename_validation_re:
-            cls.page_filename_validation_re = FormatToRegex.convert(cls.page_filename_template)
+            cls.page_filename_validation_re = re.compile(conf.PAGE_VALIDATION_REGEX)
         return cls.page_filename_validation_re.match(filename) is not None
 
     @classmethod
@@ -109,7 +86,8 @@ class SitemapGenerator(object):
         if not filename:
             return False
         if not cls.index_filename_validation_re:
-            cls.index_filename_validation_re = FormatToRegex.convert(cls.index_filename_template)
+            cls.index_filename_validation_re = re.compile(conf.INDEX_VALIDATION_REGEX)
+            cls.page_filename_validation_re = re.compile(conf.PAGE_VALIDATION_REGEX)
         return cls.index_filename_validation_re.match(filename) is not None
 
     def get_index_file_path(self, all_files=False):

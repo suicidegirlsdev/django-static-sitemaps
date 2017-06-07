@@ -25,6 +25,9 @@ SYSTEM_GZIP_PATH = getattr(settings, 'STATICSITEMAPS_SYSTEM_GZIP_PATH', '/usr/bi
 
 INDEX_FILENAME_TEMPLATE = getattr(settings, 'STATICSITEMAPS_INDEX_FILENAME_TEMPLATE', 'sitemap.%(hash)s.xml')
 
+# Validations are used as a safeguard against accidentally deleting files we didn't create
+INDEX_VALIDATION_REGEX = getattr(settings, "STATICSITEMAPS_INDEX_VALIDATION_REGEX", r'sitemap\.[a-fA-F0-9]{32}\.xml')
+
 # Template how to name the resulting sitemap pages. 
 # Will use *.xml.gz if gzipped and default template used. 
 _default_filename_template = 'sitemap-%(section)s-%(page)s.%(hash)s.xml'
@@ -34,6 +37,13 @@ if USE_GZIP:
 FILENAME_TEMPLATE = getattr(settings,
                             'STATICSITEMAPS_FILENAME_TEMPLATE',
                             _default_filename_template)
+
+
+# sitemap-GroupsSitemap-1.e52cbb9319eb33afcf44de8a70364801.xml.gz
+_default_page_regex = r'sitemap\-\w+\-\d+\.[a-fA-F0-9]{32}\.xml'
+if USE_GZIP:
+    _default_page_regex += r'\.gz'
+PAGE_VALIDATION_REGEX = getattr(settings, "STATICSITEMAPS_INDEX_VALIDATION_REGEX", _default_page_regex)
 
 # Only for backwards compatibility, same as URL.
 DOMAIN = getattr(settings, 'STATICSITEMAPS_DOMAIN', None)
@@ -73,4 +83,4 @@ CACHE_KEY = getattr(settings, 'STATICSITEMAPS_CACHE_KEY', 'sitemaps_url')
 # Leave this high or crawlers working off an old index may 404.
 PAGES_EXPIRE_AFTER = getattr(settings, 'PAGES_EXPIRE_AFTER', timedelta(days=2))
 
-SERVE_INDEX_VIA_PASSTHRU = getattr(settings, 'STATICSITEMAPS_SERVE_INDEX_VIA_PASSTHRU', True)
+SERVE_VIA_PASSTHRU = getattr(settings, 'STATICSITEMAPS_SERVE_VIA_PASSTHRU', False)
