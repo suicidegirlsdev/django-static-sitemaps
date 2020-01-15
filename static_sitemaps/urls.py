@@ -9,10 +9,7 @@ from django.http import Http404, HttpResponseRedirect, FileResponse
 from static_sitemaps import conf
 from static_sitemaps.generator import SitemapGenerator
 
-try:
-    from django.conf.urls import url
-except ImportError:  # django < 1.4
-    from django.conf.urls.defaults import patterns, url
+from django.conf.urls import url
 
 # Sets the app name for these urls
 app_name = "static_sitemaps"
@@ -43,8 +40,8 @@ def serve_page(request, filename):
     return _passthru(generator, file_path)
 
 urlpatterns = [
-    url(r'^index.xml$', serve_index, name='static_sitemaps_index'),
+    url(r'^sitemap_index.xml$', serve_index, name='static_sitemaps_index'),
     # This is mainly for testing, though could rewrite the above index file with links like below, if so inclined,
     # Using xml parser and loading the index from S3 (like with passthru setting).
-    url(r'^pages/(?P<filename>.*)$', serve_page, name='static_sitemaps_page'),
+    url(r'^sitemap_(?P<filename>.*)$', serve_page, name='static_sitemaps_page'),
 ]
