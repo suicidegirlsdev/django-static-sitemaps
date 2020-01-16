@@ -1,17 +1,19 @@
-from __future__ import print_function
+import gzip
+import hashlib
+import os
+import re
+from collections import abc
 
-import gzip, hashlib, os, re
 
 from django.contrib.sitemaps import ping_google
 from django.core.exceptions import ImproperlyConfigured
 from django.core.files.base import ContentFile
 from django.core.files.storage import FileSystemStorage
 from django.core.paginator import EmptyPage, PageNotAnInteger
-from django.core.urlresolvers import reverse, NoReverseMatch
+from django.urls import reverse, NoReverseMatch
 from django.template import loader
 from django.utils import translation
-from django.utils.encoding import smart_bytes
-from six import BytesIO
+from io import BytesIO
 from static_sitemaps import conf
 from static_sitemaps.util import _lazy_load
 from django.core.cache import cache
@@ -44,11 +46,11 @@ class SitemapGenerator(object):
         self.storage = _lazy_load(conf.STORAGE_CLASS)()
         self.sitemaps = _lazy_load(conf.ROOT_SITEMAP)
 
-        if not isinstance(self.sitemaps, dict):
+        if not isinstance(self.sitemaps, abc.Mapping):
             self.sitemaps = dict(enumerate(self.sitemaps))
 
         self.unmodified_pages = set()
-
+        self.current_files = {}
         self.out("Config: root=%s, page_dir=%s, page_template=%s, index_template=%s" % (self.root_dir, self.page_dir, self.page_path_template, self.index_path_template))
 
     @staticmethod
@@ -90,11 +92,23 @@ class SitemapGenerator(object):
             cls.page_filename_validation_re = re.compile(conf.PAGE_VALIDATION_REGEX)
         return cls.index_filename_validation_re.match(filename) is not None
 
+    def get_storage_file_paths(self, dir):
+        try:
+            return [
+                os.path.join(dir, file)
+                for file in self.storage.listdir(dir)[1]
+                if self.is_valid_index(file)
+            ]
+        except FileNotFoundError as e:
+            # Should mean bad dir
+            return []
+
     def get_index_file_path(self, all_files=False):
         '''
         Returns path of index file.
         '''
-        file_paths = [ os.path.join(self.root_dir, file) for file in self.storage.listdir(self.root_dir)[1] if self.is_valid_index(file) ]
+        file_paths = self.get_storage_file_paths(self.root_dir)
+
         if all_files:
             return file_paths
         assert file_paths, "Expected to find sitemap index file(s) in %s" % self.root_dir
@@ -113,7 +127,7 @@ class SitemapGenerator(object):
         assert most_recent_file_path, "Tried to find index file by most recently modified, but no modified times found"
         return most_recent_file_path
 
-    def get_page_urls(self, site, page):
+    def get_page_urls(self, sitemap, page):
         #self.out('Writing sitemap %s.' % filename, 2)
         urls = []
 
@@ -126,9 +140,9 @@ class SitemapGenerator(object):
 
         try:
             if conf.MOCK_SITE:
-                urls = site.get_urls(page, rs, protocol=conf.MOCK_SITE_PROTOCOL)
+                urls = sitemap.get_urls(page, rs, protocol=conf.MOCK_SITE_PROTOCOL)
             else:
-                urls = site.get_urls(page)
+                urls = sitemap.get_urls(page)
         except EmptyPage:
             self.out("Page %s empty" % page)
         except PageNotAnInteger:
@@ -148,8 +162,11 @@ class SitemapGenerator(object):
         '''
         Loads up dict of current pages with modified time.
         '''
-        self.current_files = { file: self.storage.modified_time(file) for file in 
-                              [os.path.join(self.page_dir, file) for file in self.storage.listdir(self.page_dir)[1] if self.is_valid_page(file)] }
+        self.current_files = {
+            file: self.storage.modified_time(file)
+            for file in self.get_storage_file_paths(self.page_dir)
+        }
+
         # Add in the index file(s), which can expire immediately so no expiry stored
         self.current_files.update({ file: None for file in self.get_index_file_path(all_files=True) })
         self.out("Loaded current files: %s" % self.current_files, 2)
@@ -165,7 +182,7 @@ class SitemapGenerator(object):
 
     def cull_expired_files(self):
         culled_count = 0
-        for file_path, mod in self.current_files.iteritems():
+        for file_path, mod in self.current_files.items():
             # Don't cull files still in use
             # NOTE: because we don't update unmodified files, they can get past the ttl and not have any delay when next update occurs. 
             # But, presuming a safely high ttl, then the file should not be getting crawled by any relatively active crawler anyhow.
@@ -182,13 +199,13 @@ class SitemapGenerator(object):
         parts = []
 
         # Collect all pages and write them.
-        for section, site in self.sitemaps.items():
-            if callable(site):
-                site = site()
-            pages = site.paginator.num_pages
+        for section, sitemap in self.sitemaps.items():
+            if callable(sitemap):
+                sitemap = sitemap()
+            pages = sitemap.paginator.num_pages
 
             for page in range(1, pages + 1):
-                file_path = self.write_page(site, page, section)
+                file_path = self.write_page(sitemap, page, section)
                 # If it's an existing file (not changed), use our stored value, otherwise look it up.
                 # Could probably just use "now", but this is safer for tz issues and such.
                 lastmod = self.current_files.get(file_path, self.storage.modified_time(file_path))
@@ -201,7 +218,10 @@ class SitemapGenerator(object):
         self.ping_google()
 
     def write_index(self, parts):
-        output = loader.render_to_string(conf.INDEX_TEMPLATE, {'sitemaps': parts})
+        output = loader.render_to_string(
+            conf.INDEX_TEMPLATE,
+            {'sitemaps': parts}
+        ).encode('utf_8')
         hash = self.get_hash(output)
         file_path = self.index_path_template % { 'hash': hash }
         if self.is_modified(file_path):
@@ -214,13 +234,16 @@ class SitemapGenerator(object):
         url = self.storage.url(file_path)
         cache.set(self.cache_key, url)
 
-    def write_page(self, site, page, section):
+    def write_page(self, sitemap, page, section):
         '''
-        Renders template and stores to file based on site/page/section and content hash, returning file path.
+        Renders template and stores to file based on sitemap/page/section and content hash, returning file path.
         '''
-        template = getattr(site, 'sitemap_template', 'sitemap.xml')
+        template = getattr(sitemap, 'sitemap_template', 'sitemap.xml')
         # Encode it now, both hash and f.write require it.
-        output = smart_bytes(loader.render_to_string(template, {'urlset': self.get_page_urls(site, page)}), errors="ignore")
+        output = loader.render_to_string(
+            template,
+            {'urlset': self.get_page_urls(sitemap, page)}
+        ).encode('utf_8')
         # NOTE: hash based on raw content, BEFORE gzip. However, changing to not zip will
         # change the default filename and thereby invalidate the stored file.
         hash = self.get_hash(output)
