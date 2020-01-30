@@ -120,7 +120,7 @@ class SitemapGenerator(object):
         most_recent_mod = None
         most_recent_file_path = None
         for file_path in file_paths:
-            mod = self.storage.modified_time(file_path)
+            mod = self.storage.get_modified_time(file_path)
             if not most_recent_mod or (mod and mod > most_recent_mod):
                 most_recent_mod = mod
                 most_recent_file_path = file_path
@@ -163,7 +163,7 @@ class SitemapGenerator(object):
         Loads up dict of current pages with modified time.
         '''
         self.current_files = {
-            file: self.storage.modified_time(file)
+            file: self.storage.get_modified_time(file)
             for file in self.get_storage_file_paths(self.page_dir)
         }
 
@@ -208,7 +208,7 @@ class SitemapGenerator(object):
                 file_path = self.write_page(sitemap, page, section)
                 # If it's an existing file (not changed), use our stored value, otherwise look it up.
                 # Could probably just use "now", but this is safer for tz issues and such.
-                lastmod = self.current_files.get(file_path, self.storage.modified_time(file_path))
+                lastmod = self.current_files.get(file_path, self.storage.get_modified_time(file_path))
                 parts.append({
                     'location': self.storage.url(file_path),
                     'lastmod': lastmod
