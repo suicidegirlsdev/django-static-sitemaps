@@ -3,7 +3,7 @@ Created on 24.10.2011
 
 @author: xaralis
 '''
-from django.conf.urls import re_path
+from django.urls import re_path
 
 from .views import index_view, page_view
 
